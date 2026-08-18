@@ -1,0 +1,65 @@
+.primary:disabled,
+.gate button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
+
+.kpi-editor {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid #e4dfd7;
+  border-radius: 12px;
+  background: #fbfaf7;
+}
+
+.kpi-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.kpi-title h3 {
+  margin: 4px 0 12px;
+  font-size: 17px;
+}
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(90px, .45fr) auto auto;
+  gap: 9px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid #e4dfd7;
+}
+
+.kpi-row input {
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #d8d1c8;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.kpi-row small {
+  grid-column: 1 / -1;
+  color: #777168;
+}
+
+.remove-kpi {
+  border: 0;
+  background: transparent;
+  color: #953920;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+@media (max-width: 800px) {
+  .kpi-row {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .kpi-row input:first-child {
+    grid-column: 1 / -1;
+  }
+}

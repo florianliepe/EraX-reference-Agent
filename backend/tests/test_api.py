@@ -15,6 +15,8 @@ def test_full_flow(monkeypatch, tmp_path):
     document.add_paragraph("Outcome: Incident triage time reduced by 25 percent.")
     payload = BytesIO(); document.save(payload)
     client = TestClient(app); headers = {"X-Pilot-Password": settings.pilot_password}
+    assert client.get("/auth/check", headers=headers).json() == {"authenticated": True}
+    assert client.get("/auth/check", headers={"X-Pilot-Password": "wrong"}).status_code == 401
     uploaded = client.post("/upload", files={"files": ("reference.docx", payload.getvalue(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}, headers=headers)
     assert uploaded.status_code == 200
     started = client.post(f"/generate/{uploaded.json()['session_id']}", headers=headers)
@@ -22,6 +24,14 @@ def test_full_flow(monkeypatch, tmp_path):
     result = client.get(f"/result/{job_id}", headers=headers)
     assert result.status_code == 200
     assert result.json()["fields"]["client"]["value"] == "Contoso Energy"
+    assert result.json()["fields"]["kpis"][0]["value"] == "25 percent"
+    kpi_id = result.json()["fields"]["kpis"][0]["id"]
+    patched = client.patch(
+        f"/result/{job_id}",
+        headers=headers,
+        json={"values": {}, "kpis": [{"id": kpi_id, "name": "Incident triage reduction", "value": "25%"}]},
+    )
+    assert patched.json()["fields"]["kpis"][0]["edited"] is True
+    assert patched.json()["fields"]["kpis"][0]["evidence"][0]["source_file"] == "reference.docx"
     download = client.get(f"/download/{job_id}", headers=headers)
     assert download.status_code == 200
-
