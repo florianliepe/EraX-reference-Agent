@@ -1,0 +1,17 @@
+services:
+  backend:
+    build: {context: ., dockerfile: infra/backend.Dockerfile}
+    env_file:
+      - path: .env
+        required: false
+    ports: ["8000:8000"]
+    volumes: ["erax-data:/app/data"]
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/frontend.Dockerfile
+      args: {VITE_API_URL: "http://localhost:8000"}
+    ports: ["5173:80"]
+    depends_on: [backend]
+volumes:
+  erax-data:

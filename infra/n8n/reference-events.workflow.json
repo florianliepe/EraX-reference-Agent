@@ -1,0 +1,10 @@
+{
+  "name": "EraX Reference Events (optional)",
+  "nodes": [
+    {"parameters":{"httpMethod":"POST","path":"erax-reference-completed","responseMode":"onReceived","options":{}},"id":"webhook","name":"Completion webhook","type":"n8n-nodes-base.webhook","typeVersion":2,"position":[260,300]},
+    {"parameters":{"assignments":{"assignments":[{"id":"job","name":"job_id","value":"={{ $json.body.job_id }}","type":"string"},{"id":"class","name":"classification","value":"={{ $json.body.classification }}","type":"string"}]},"options":{}},"id":"shape","name":"Keep non-sensitive metadata only","type":"n8n-nodes-base.set","typeVersion":3.4,"position":[500,300]}
+  ],
+  "connections":{"Completion webhook":{"main":[[{"node":"Keep non-sensitive metadata only","type":"main","index":0}]]}},
+  "active":false,"settings":{"executionOrder":"v1"},"versionId":"00000000-0000-0000-0000-000000000001"
+}
+
