@@ -8,4 +8,5 @@ dist/
 *.tsbuildinfo
 data/
 *.pptx
+!backend/app/assets/reference-template.pptx
 !.github/

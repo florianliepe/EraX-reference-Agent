@@ -13,6 +13,13 @@ from .structuring import SourceChunk, build_draft
 MODEL_VERSIONS: dict[str, str] = {}
 
 
+def _visual_path(session_id: str) -> Path | None:
+    return next(
+        (Path(file.path) for file in store.sessions[session_id] if Path(file.path).suffix.lower() in {".png", ".jpg", ".jpeg"}),
+        None,
+    )
+
+
 def process_job(job_id: str) -> None:
     job = store.jobs[job_id]
     try:
@@ -37,7 +44,7 @@ def process_job(job_id: str) -> None:
         job.result, model_version = generate(draft)
         MODEL_VERSIONS[job_id] = model_version; job.progress = 84
         output = Path(store.sessions[job.session_id][0].path).parent / f"reference-{job.id}.pptx"
-        render_ppt(job.result, job.classification, output, job.id, model_version)
+        render_ppt(job.result, job.classification, output, job.id, model_version, _visual_path(job.session_id))
         job.output_path = str(output); job.progress = 100; job.status = "completed"
         job.completed_at = datetime.now(timezone.utc)
     except Exception as exc:
@@ -53,6 +60,12 @@ def update_result(job_id: str, values: dict[str, str]) -> ReferenceDraft:
             section = getattr(job.result, name)
             section.value = value.strip() or "Insufficient source evidence"
             section.edited = True
-    render_ppt(job.result, job.classification, Path(job.output_path), job.id, MODEL_VERSIONS.get(job.id, "deterministic-v1"))
+    render_ppt(
+        job.result,
+        job.classification,
+        Path(job.output_path),
+        job.id,
+        MODEL_VERSIONS.get(job.id, "deterministic-v1"),
+        _visual_path(job.session_id),
+    )
     return job.result
-

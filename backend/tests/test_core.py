@@ -40,3 +40,12 @@ def test_renderer_always_creates_one_slide(tmp_path: Path):
     deck = Presentation(output)
     assert len(deck.slides) == 1
     assert "classification=internal" in deck.core_properties.comments
+    slide = deck.slides[0]
+    assert slide.part.slide_layout.name == "Title Only"
+    assert next(shape for shape in slide.shapes if shape.name == "Title 12").text == "Digital maintenance transformation"
+    metadata = next(shape for shape in slide.shapes if shape.name == "Table 5").table
+    assert metadata.cell(0, 0).text == "Client: Northwind Rail"
+    assert metadata.cell(1, 1).text == "Service: Insufficient source evidence"
+    content = next(shape for shape in slide.shapes if shape.name == "Table 13").table
+    assert "Manual planning caused delayed maintenance decisions." in content.cell(0, 0).text
+    assert "No structured test management" not in content.cell(0, 0).text

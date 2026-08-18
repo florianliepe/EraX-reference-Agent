@@ -70,14 +70,14 @@ cd frontend && npm run lint && npm run build
 
 ## Deployment
 
-The frontend workflow in `.github/workflows/ci.yml` builds a GitHub Pages artifact. Configure repository variable `VITE_API_URL` to the public HTTPS backend URL. Deploy the backend container from `infra/backend.Dockerfile` to any container host.
+The frontend workflow in `.github/workflows/ci.yml` builds a GitHub Pages artifact. Configure repository variable `VITE_API_URL` to the public HTTPS backend URL. Deploy the backend container from `infra/backend.Dockerfile` to any container host. For a concrete Azure Container Apps pilot deployment, follow [the backend deployment runbook](docs/DEPLOY_BACKEND.md).
 
 ## Known pilot limitations
 
 - Jobs and rate limits are in-process; use PostgreSQL/Redis for multiple replicas.
 - OCR requires a Tesseract installation and is best-effort.
 - Legacy `.doc`, `.xls`, and `.ppt` files require LibreOffice conversion; OOXML formats work natively.
-- The bundled template is a fixed, brand-inspired deterministic layout. Replace `backend/app/ppt.py` layout constants with an approved corporate `.pptx` master before external production use.
+- PowerPoint output uses the supplied approved `Reference Template.pptx` master and preserves its inherited layout, typography, tables, logo, and image frame. An uploaded PNG/JPG replaces the template image; otherwise the approved template image remains.
 - Malware handling validates file signatures and isolates uploads but is not a substitute for a production antivirus/content-disarm service.
 
 ## Azure migration
@@ -85,4 +85,3 @@ The frontend workflow in `.github/workflows/ci.yml` builds a GitHub Pages artifa
 Map local blob storage to Azure Blob Storage, job state to PostgreSQL, background execution to Azure Container Apps Jobs or Functions, password access to Entra ID, and the OpenAI adapter to Azure OpenAI. The parsing, evidence, generation, and PPT modules remain unchanged behind their interfaces.
 
 See [target-mode instructions](docs/TARGET_MODE.md) and [architecture](docs/ARCHITECTURE.md).
-
