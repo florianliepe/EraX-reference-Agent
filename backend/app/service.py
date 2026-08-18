@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from .generation import generate
-from .models import ReferenceDraft
+from .models import Confidence, KPI, ReferenceDraft
 from .parsers import CLASSIFICATION_ORDER, detect_classification, parse_file
 from .ppt import render_ppt
 from .store import store
@@ -51,7 +51,7 @@ def process_job(job_id: str) -> None:
         job.status = "failed"; job.error = str(exc); job.progress = 100
 
 
-def update_result(job_id: str, values: dict[str, str]) -> ReferenceDraft:
+def update_result(job_id: str, values: dict[str, str], kpis: list[dict[str, str]] | None = None) -> ReferenceDraft:
     job = store.jobs[job_id]
     if not job.result:
         raise ValueError("Result is not ready")
@@ -60,6 +60,24 @@ def update_result(job_id: str, values: dict[str, str]) -> ReferenceDraft:
             section = getattr(job.result, name)
             section.value = value.strip() or "Insufficient source evidence"
             section.edited = True
+    if kpis is not None:
+        previous = job.result.kpis
+        revised: list[KPI] = []
+        by_id = {item.id: item for item in previous}
+        for item in kpis[:6]:
+            name = item.get("name", "").strip()
+            value = item.get("value", "").strip()
+            if not name or not value:
+                continue
+            existing = by_id.get(item.get("id", ""))
+            if existing:
+                metric = existing.model_copy(deep=True)
+                metric.edited = metric.edited or metric.name != name or metric.value != value
+                metric.name, metric.value = name, value
+            else:
+                metric = KPI(id=item.get("id") or KPI(name=name, value=value).id, name=name, value=value, confidence=Confidence.weak, edited=True)
+            revised.append(metric)
+        job.result.kpis = revised
     render_ppt(
         job.result,
         job.classification,

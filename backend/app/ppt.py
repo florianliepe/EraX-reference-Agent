@@ -68,11 +68,18 @@ def _sentences(value: str, limit: int) -> list[str]:
     return parts[:limit] or ["Insufficient source evidence"]
 
 
-def _set_section_cell(cell, heading: str, value: str) -> None:
+def _set_section_cell(cell, heading: str, value: str, kpi_summary: str | None = None) -> None:
     frame = cell.text_frame
     paragraphs = list(frame.paragraphs)
     _set_paragraph_text(paragraphs[0], heading)
-    body = _sentences(value, max(1, len(paragraphs) - 1))
+    slots = max(1, len(paragraphs) - 1)
+    body = _sentences(value, slots)
+    if kpi_summary:
+        metric_line = compact(f"Key KPIs: {kpi_summary}", 180)
+        if slots == 1:
+            body = [compact(f"{body[0]} {metric_line}", 300)]
+        else:
+            body = body[: slots - 1] + [metric_line]
     for index, sentence in enumerate(body, 1):
         target = paragraphs[min(index, len(paragraphs) - 1)]
         _set_paragraph_text(target, sentence)
@@ -128,7 +135,8 @@ def render_ppt(
     content = _shape(slide, CONTENT_TABLE).table
     _set_section_cell(content.cell(0, 0), "Initial Situation", draft.situation_challenge.value)
     _set_section_cell(content.cell(0, 1), "Approach and Solution", draft.approach.value)
-    _set_section_cell(content.cell(1, 0), "Impact", draft.outcome_impact.value)
+    kpi_summary = "; ".join(f"{item.name}: {item.value}" for item in draft.kpis[:3])
+    _set_section_cell(content.cell(1, 0), "Impact", draft.outcome_impact.value, kpi_summary or None)
     _replace_picture(slide, image_path)
 
     deck.core_properties.title = draft.title.value

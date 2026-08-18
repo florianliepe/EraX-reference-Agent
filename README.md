@@ -6,6 +6,7 @@ Pilot-grade, evidence-grounded generation of a single-slide Eraneos client refer
 
 - React/Vite single-page workflow: Upload → Generate → Review → Download.
 - FastAPI backend with mixed-format parsing, classification detection, provenance, confidence flags, editable review fields, audit records, and deterministic one-slide PowerPoint rendering.
+- Flexible, evidence-backed KPI extraction for project revenue, improvements, savings, FTE effects, and other quantified outcomes; reviewers can edit the extracted name/value pairs before export.
 - Optional OpenAI adapter behind an environment switch. The default deterministic provider works without external services and never invents missing evidence.
 - Docker Compose, GitHub Actions, GitHub Pages deployment, and an optional n8n notification/cleanup workflow.
 
@@ -60,6 +61,8 @@ Never put model credentials or the pilot password into `VITE_*` variables.
 - `GET /health`
 
 All pilot endpoints except `/health` use the `X-Pilot-Password` header.
+
+The login gate uses `GET /auth/check`. On GitHub Pages, the frontend deliberately refuses to call `localhost`; `VITE_API_URL` must be configured with the deployed backend's public HTTPS URL.
 
 ## Validation
 

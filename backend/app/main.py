@@ -33,10 +33,15 @@ def auth(request: Request, x_pilot_password: str = Header(default="")) -> None:
 
 class Edits(BaseModel):
     values: dict[str, str]
+    kpis: list[dict[str, str]] | None = None
 
 
 @app.get("/health")
 def health(): return {"status": "ok"}
+
+
+@app.get("/auth/check", dependencies=[Depends(auth)])
+def auth_check(): return {"authenticated": True}
 
 
 @app.post("/upload", dependencies=[Depends(auth)])
@@ -76,7 +81,7 @@ def result(job_id: str):
 @app.patch("/result/{job_id}", dependencies=[Depends(auth)])
 def patch_result(job_id: str, edits: Edits):
     if job_id not in store.jobs: raise HTTPException(404, "Job not found")
-    return {"fields": update_result(job_id, edits.values)}
+    return {"fields": update_result(job_id, edits.values, edits.kpis)}
 
 
 @app.get("/download/{job_id}", dependencies=[Depends(auth)])
@@ -94,6 +99,6 @@ def audit(job_id: str):
         "job_id": job.id, "session_id": job.session_id, "classification": job.classification,
         "created_at": job.created_at, "completed_at": job.completed_at,
         "generator": MODEL_VERSIONS.get(job.id, "unknown"),
-        "sections": {name: {"confidence": section.confidence, "edited": section.edited, "evidence": section.evidence} for name, section in job.result},
+        "sections": {name: {"confidence": getattr(job.result, name).confidence, "edited": getattr(job.result, name).edited, "evidence": getattr(job.result, name).evidence} for name in ("title", "client", "date", "industry", "service", "situation_challenge", "approach", "outcome_impact")},
+        "kpis": job.result.kpis,
     }
-

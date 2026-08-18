@@ -13,7 +13,8 @@ Keep 'Insufficient source evidence' unchanged. Respect the character limits supp
 
 def _validate(original: ReferenceDraft, proposed: dict[str, str]) -> ReferenceDraft:
     result = original.model_copy(deep=True)
-    for name, section in result:
+    for name in LIMITS:
+        section = getattr(result, name)
         candidate = proposed.get(name, section.value)
         if section.confidence == "missing":
             candidate = "Insufficient source evidence"
@@ -26,7 +27,7 @@ def generate(draft: ReferenceDraft) -> tuple[ReferenceDraft, str]:
         return _validate(draft, {}), "deterministic-v1"
     from openai import OpenAI
     client = OpenAI(api_key=settings.openai_api_key)
-    payload = {name: section.value for name, section in draft}
+    payload = {name: getattr(draft, name).value for name in LIMITS}
     response = client.responses.create(
         model=settings.openai_model,
         instructions=SYSTEM_PROMPT,
@@ -37,4 +38,3 @@ def generate(draft: ReferenceDraft) -> tuple[ReferenceDraft, str]:
     except json.JSONDecodeError:
         proposed = {}
     return _validate(draft, proposed), settings.openai_model
-

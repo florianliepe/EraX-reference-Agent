@@ -9,12 +9,13 @@ Deliver a runnable monorepo and verified end-to-end workflow in which a consulta
 ## Product rules
 
 1. Manual upload is the primary path. Do not add SharePoint, CRM, SSO, multilingual UI, or multi-slide output to the pilot.
-2. Normalize content into: Title, Client, Date, Industry, Service, Situation & Challenge, Approach, and Outcome & Impact.
+2. Normalize content into: Title, Client, Date, Industry, Service, Situation & Challenge, Approach, and Outcome & Impact. Additionally extract up to six flexible project KPI name/value pairs when quantified evidence is available, including revenue, savings, percentage improvements, FTE effects, productivity, quality, availability, or comparable project-specific measures.
 3. Every generated core claim must cite source-file evidence. If evidence is absent, write `Insufficient source evidence` and show a red review flag. Never silently invent or remove content.
-4. Detect `public`, `internal`, `confidential`, and `strict` labels. Show the highest detected classification and persist it in the audit record and PowerPoint metadata.
-5. Use one concise writing style. Enforce placeholder character and line budgets by compression; never add a second slide.
-6. Keep parsing, structuring, grounding, validation, and PowerPoint rendering in versioned backend code. Use n8n only for optional notifications, callbacks, or scheduled cleanup.
-7. Keep credentials server-side and environment-based. The static frontend must contain no secret.
+4. Every extracted KPI must retain its source snippet, location, and confidence. Deduplicate repeated name/value pairs, allow reviewers to edit, add, or remove pairs, and mark manual changes in the audit trail. If no quantified evidence exists, return an empty KPI list rather than creating a placeholder metric.
+5. Detect `public`, `internal`, `confidential`, and `strict` labels. Show the highest detected classification and persist it in the audit record and PowerPoint metadata.
+6. Use one concise writing style. Aggregate up to three verified KPI pairs into the existing Impact section of the approved one-page template, preserving their reviewed order. Enforce placeholder character and line budgets by compression; never add a second slide or shrink inherited template typography.
+7. Keep parsing, structuring, grounding, validation, and PowerPoint rendering in versioned backend code. Use n8n only for optional notifications, callbacks, or scheduled cleanup.
+8. Keep credentials server-side and environment-based. The static frontend must contain no secret. A Pages deployment without `VITE_API_URL` must show a configuration error and must never fall back to a visitor's `localhost`.
 
 ## Engineering constraints
 
@@ -23,7 +24,7 @@ Deliver a runnable monorepo and verified end-to-end workflow in which a consulta
 - Parsing: native OOXML/PDF/image parsing with OCR fallback and explicit failure states.
 - LLM: provider interface supporting deterministic local behavior, OpenAI, and later Azure OpenAI. Model output is a proposal, never the evidence source.
 - PPT: deterministic `python-pptx` renderer with fixed coordinates and one-slide validation.
-- Pilot access: shared password header, rate limiting, CORS allowlist, file size/type/signature checks, generated filenames, and isolated storage.
+- Pilot access: shared password header, a dedicated authenticated `/auth/check` endpoint, rate limiting, CORS allowlist, file size/type/signature checks, generated filenames, and isolated storage.
 - Delivery: Docker, CI lint/test/build, Pages artifact, README, migration notes, and tests.
 
 ## Autonomy and permissions
@@ -50,12 +51,13 @@ Use an original interface derived from the supplied references: warm off-white b
 
 - Mixed files can be uploaded and show per-file states.
 - The result contains all canonical fields, evidence snippets, and green/amber/red confidence.
+- Quantified project evidence appears as editable KPI name/value pairs with provenance, and up to three pairs flow into the PowerPoint Impact summary.
 - Missing evidence is explicit and no unsupported core claim is emitted.
 - Classification is visible and auditable.
 - Reviewer edits are reflected in the exported `.pptx`.
 - Every generated presentation contains exactly one slide and passes all length checks.
 - Frontend and backend build/tests pass; deployment configuration contains no secret.
+- The login gate validates against `/auth/check`; production/static deployments never call `localhost`, and missing backend configuration is explained before login is attempted.
 - Documentation explains local operation, deployment, limitations, and Azure migration.
 
 Continue independently through safe, reversible implementation and validation. Ask only when a missing choice would materially change the product or when an external action crosses the approval boundary above.
-

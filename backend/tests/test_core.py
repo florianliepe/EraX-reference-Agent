@@ -13,6 +13,7 @@ def sample_draft():
         SourceChunk("1", "brief.docx", Chunk("Challenge: Manual planning caused delayed maintenance decisions.", "paragraph 3")),
         SourceChunk("1", "brief.docx", Chunk("Approach: Implemented a governed data platform and redesigned workflows.", "paragraph 4")),
         SourceChunk("1", "brief.docx", Chunk("Outcome: Reduced planning time by 30 percent.", "paragraph 5")),
+        SourceChunk("1", "brief.docx", Chunk("Project revenue: EUR 1.2 million", "paragraph 6")),
     ]
     return build_draft(chunks)
 
@@ -34,6 +35,14 @@ def test_evidence_is_preserved():
     assert draft.outcome_impact.evidence[0].source_file == "brief.docx"
 
 
+def test_flexible_kpis_are_extracted_as_grounded_pairs():
+    draft = sample_draft()
+    pairs = {(item.name, item.value) for item in draft.kpis}
+    assert ("Planning Time reduction", "30 percent") in pairs
+    assert ("Project Revenue", "EUR 1.2 million") in pairs
+    assert all(item.evidence[0].source_file == "brief.docx" for item in draft.kpis)
+
+
 def test_renderer_always_creates_one_slide(tmp_path: Path):
     output = tmp_path / "reference.pptx"
     render_ppt(sample_draft(), "internal", output, "job12345", "test")
@@ -48,4 +57,6 @@ def test_renderer_always_creates_one_slide(tmp_path: Path):
     assert metadata.cell(1, 1).text == "Service: Insufficient source evidence"
     content = next(shape for shape in slide.shapes if shape.name == "Table 13").table
     assert "Manual planning caused delayed maintenance decisions." in content.cell(0, 0).text
+    assert "Key KPIs" in content.cell(1, 0).text
+    assert "EUR 1.2 million" in content.cell(1, 0).text
     assert "No structured test management" not in content.cell(0, 0).text
