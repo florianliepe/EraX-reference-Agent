@@ -1,6 +1,9 @@
 from pathlib import Path
+from types import SimpleNamespace
 from pptx import Presentation
 from backend.app.models import Confidence
+from backend.app.generation import generate
+from backend.app import generation
 from backend.app.parsers import Chunk, detect_classification
 from backend.app.ppt import render_ppt
 from backend.app.structuring import SourceChunk, build_draft
@@ -41,6 +44,39 @@ def test_flexible_kpis_are_extracted_as_grounded_pairs():
     assert ("Planning Time reduction", "30 percent") in pairs
     assert ("Project Revenue", "EUR 1.2 million") in pairs
     assert all(item.evidence[0].source_file == "brief.docx" for item in draft.kpis)
+
+
+def test_openai_compatible_gateway_uses_configured_base_url(monkeypatch):
+    captured = {}
+
+    class FakeCompletions:
+        def create(self, **kwargs):
+            captured["request"] = kwargs
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content='{"title":"Concise title"}'))]
+            )
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            captured["client"] = kwargs
+            self.chat = SimpleNamespace(completions=FakeCompletions())
+
+    monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
+    monkeypatch.setattr(generation.settings, "llm_provider", "openai")
+    monkeypatch.setattr(generation.settings, "openai_api_key", "test-key")
+    monkeypatch.setattr(generation.settings, "openai_base_url", "https://gateway.example")
+    monkeypatch.setattr(generation.settings, "openai_model", "gpt-test")
+
+    result, model = generate(sample_draft())
+
+    assert captured["client"] == {
+        "api_key": "test-key",
+        "base_url": "https://gateway.example",
+    }
+    assert captured["request"]["model"] == "gpt-test"
+    assert captured["request"]["response_format"] == {"type": "json_object"}
+    assert result.title.value == "Concise title"
+    assert model == "gpt-test"
 
 
 def test_renderer_always_creates_one_slide(tmp_path: Path):

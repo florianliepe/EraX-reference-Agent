@@ -43,8 +43,9 @@ npm run dev
 | `CORS_ORIGINS` | Comma-separated allowed frontend origins | localhost |
 | `MAX_UPLOAD_MB` | Per-file size limit | `25` |
 | `LLM_PROVIDER` | `deterministic` or `openai` | `deterministic` |
-| `OPENAI_API_KEY` | Server-only model credential | unset |
-| `OPENAI_MODEL` | Model used by the OpenAI adapter | `gpt-5.6-luna` |
+| `OPENAI_API_KEY` | Server-only OpenAI-compatible model credential | unset |
+| `OPENAI_BASE_URL` | OpenAI-compatible API base URL; use `https://ai-gateway.eraneos.com` for the Eraneos AI Gateway | unset |
+| `OPENAI_MODEL` | Model used by the OpenAI adapter | `gpt-5-mini` |
 | `VITE_API_URL` | Backend URL compiled into the frontend | localhost |
 
 Never put model credentials or the pilot password into `VITE_*` variables.

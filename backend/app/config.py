@@ -9,7 +9,8 @@ class Settings(BaseSettings):
     max_upload_mb: int = 25
     llm_provider: str = "deterministic"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5.6-luna"
+    openai_base_url: str | None = None
+    openai_model: str = "gpt-5-mini"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
