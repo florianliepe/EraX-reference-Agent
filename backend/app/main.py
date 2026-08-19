@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .config import settings
+from .knowledge_store import AzureKnowledgeStore
 from .parsers import SUPPORTED
 from .service import MODEL_VERSIONS, process_job, update_result
 from .store import store
@@ -34,6 +35,11 @@ def auth(request: Request, x_pilot_password: str = Header(default="")) -> None:
 class Edits(BaseModel):
     values: dict[str, str]
     kpis: list[dict[str, str]] | None = None
+
+
+class Approval(BaseModel):
+    approved_by: str
+    reuse_allowed: bool = False
 
 
 @app.get("/health")
@@ -84,11 +90,39 @@ def patch_result(job_id: str, edits: Edits):
     return {"fields": update_result(job_id, edits.values, edits.kpis)}
 
 
+@app.post("/approve/{job_id}", dependencies=[Depends(auth)])
+def approve(job_id: str, approval: Approval):
+    job = store.jobs.get(job_id)
+    if not job or not job.result or not job.output_path:
+        raise HTTPException(404, "Result not ready")
+    approved_by = approval.approved_by.strip()
+    if not approved_by:
+        raise HTTPException(422, "Reviewer name is required")
+    output_dir = Path(job.output_path).parent
+    publication = AzureKnowledgeStore().publish(
+        job,
+        approved_by=approved_by[:120],
+        reuse_allowed=approval.reuse_allowed,
+        output_dir=output_dir,
+    )
+    job.publication = publication.model_dump(mode="json")
+    return {"publication": job.publication}
+
+
 @app.get("/download/{job_id}", dependencies=[Depends(auth)])
 def download(job_id: str):
     job = store.jobs.get(job_id)
     if not job or not job.output_path or not Path(job.output_path).exists(): raise HTTPException(404, "PowerPoint not ready")
     return FileResponse(job.output_path, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation", filename="Eraneos-client-reference.pptx")
+
+
+@app.get("/knowledge/{job_id}", dependencies=[Depends(auth)])
+def knowledge(job_id: str):
+    job = store.jobs.get(job_id)
+    bundle_path = (job.publication or {}).get("bundle_path") if job else None
+    if not bundle_path or not Path(bundle_path).exists():
+        raise HTTPException(404, "Approved knowledge bundle not ready")
+    return FileResponse(bundle_path, media_type="application/ld+json", filename="Eraneos-reference-knowledge.jsonld")
 
 
 @app.get("/audit/{job_id}", dependencies=[Depends(auth)])
@@ -99,6 +133,8 @@ def audit(job_id: str):
         "job_id": job.id, "session_id": job.session_id, "classification": job.classification,
         "created_at": job.created_at, "completed_at": job.completed_at,
         "generator": MODEL_VERSIONS.get(job.id, "unknown"),
+        "workflow": job.workflow_artifacts,
+        "publication": job.publication,
         "sections": {name: {"confidence": getattr(job.result, name).confidence, "edited": getattr(job.result, name).edited, "evidence": getattr(job.result, name).evidence} for name in ("title", "client", "date", "industry", "service", "situation_challenge", "approach", "outcome_impact")},
         "kpis": job.result.kpis,
     }

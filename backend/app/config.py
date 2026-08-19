@@ -11,6 +11,17 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     openai_model: str = "gpt-5-mini"
+    openai_embedding_model: str | None = None
+    agentic_workflow_enabled: bool = False
+    canonical_language: str = "en"
+    cross_project_reuse_enabled: bool = False
+    external_web_enrichment_enabled: bool = False
+    azure_search_endpoint: str | None = None
+    azure_search_api_key: str | None = None
+    azure_search_index_evidence: str = "erax-evidence-v1"
+    azure_search_index_references: str = "erax-references-v1"
+    azure_search_api_version: str = "2024-07-01"
+    knowledge_blob_container_url: str | None = None
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

@@ -67,3 +67,5 @@ class JobRecord(BaseModel):
     result: ReferenceDraft | None = None
     output_path: str | None = None
     error: str | None = None
+    workflow_artifacts: dict = Field(default_factory=dict)
+    publication: dict | None = None

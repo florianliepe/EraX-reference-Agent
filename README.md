@@ -4,10 +4,11 @@ Pilot-grade, evidence-grounded generation of a single-slide Eraneos client refer
 
 ## What is included
 
-- React/Vite single-page workflow: Upload → Generate → Review → Download.
+- React/Vite single-page workflow: Upload → Generate → Review → Human approval → Download.
 - FastAPI backend with mixed-format parsing, classification detection, provenance, confidence flags, editable review fields, audit records, and deterministic one-slide PowerPoint rendering.
 - Flexible, evidence-backed KPI extraction for project revenue, improvements, savings, FTE effects, and other quantified outcomes; reviewers can edit the extracted name/value pairs before export.
 - Optional OpenAI adapter behind an environment switch. The default deterministic provider works without external services and never invents missing evidence.
+- Code-controlled seven-stage agent workflow with typed evidence, entity/metric linking, permission-filtered retrieval, claim aggregation, writing, independent verification, and JSON-LD publication.
 - Docker Compose, GitHub Actions, GitHub Pages deployment, and an optional n8n notification/cleanup workflow.
 
 ## Local run
@@ -46,6 +47,15 @@ npm run dev
 | `OPENAI_API_KEY` | Server-only OpenAI-compatible model credential | unset |
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL; use `https://ai-gateway.eraneos.com` for the Eraneos AI Gateway | unset |
 | `OPENAI_MODEL` | Model used by the OpenAI adapter | `gpt-5-mini` |
+| `AGENTIC_WORKFLOW_ENABLED` | Enable the typed multi-stage LLM workflow | `false` |
+| `CANONICAL_LANGUAGE` | Working/output language; original evidence remains unchanged | `en` |
+| `CROSS_PROJECT_REUSE_ENABLED` | Allow retrieval of approved, opt-in claims | `false` |
+| `EXTERNAL_WEB_ENRICHMENT_ENABLED` | Reserved safety switch; keep disabled for this pilot | `false` |
+| `AZURE_SEARCH_ENDPOINT` | Existing Azure AI Search endpoint | unset |
+| `AZURE_SEARCH_API_KEY` | Server-only Azure AI Search credential | unset |
+| `AZURE_SEARCH_INDEX_EVIDENCE` | Isolated evidence index | `erax-evidence-v1` |
+| `AZURE_SEARCH_INDEX_REFERENCES` | Isolated approved-claim index | `erax-references-v1` |
+| `KNOWLEDGE_BLOB_CONTAINER_URL` | Server-only Blob container URL with write SAS for JSON-LD bundles | unset |
 | `VITE_API_URL` | Backend URL compiled into the frontend | localhost |
 
 Never put model credentials or the pilot password into `VITE_*` variables.
@@ -57,7 +67,9 @@ Never put model credentials or the pilot password into `VITE_*` variables.
 - `GET /status/{job_id}`
 - `GET /result/{job_id}`
 - `PATCH /result/{job_id}`
+- `POST /approve/{job_id}`
 - `GET /download/{job_id}`
+- `GET /knowledge/{job_id}`
 - `GET /audit/{job_id}`
 - `GET /health`
 
@@ -89,3 +101,4 @@ The frontend workflow in `.github/workflows/ci.yml` builds a GitHub Pages artifa
 Map local blob storage to Azure Blob Storage, job state to PostgreSQL, background execution to Azure Container Apps Jobs or Functions, password access to Entra ID, and the OpenAI adapter to Azure OpenAI. The parsing, evidence, generation, and PPT modules remain unchanged behind their interfaces.
 
 See [target-mode instructions](docs/TARGET_MODE.md) and [architecture](docs/ARCHITECTURE.md).
+The agentic knowledge design, typed contracts, prompts, repair rules, and acceptance gates are in [Agentic Reference Intelligence target mode](docs/TARGET_MODE_AGENTIC_KNOWLEDGE.md).
