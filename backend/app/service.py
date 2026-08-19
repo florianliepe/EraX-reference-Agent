@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
+from .agentic_workflow import run_agentic_workflow
+from .config import settings
 from .generation import generate
 from .models import Confidence, KPI, ReferenceDraft
 from .parsers import CLASSIFICATION_ORDER, detect_classification, parse_file
@@ -40,8 +42,15 @@ def process_job(job_id: str) -> None:
         if not chunks:
             raise ValueError("No readable source evidence was extracted")
         job.classification = max(labels or ["public"], key=lambda label: CLASSIFICATION_ORDER[label])
-        draft = build_draft(chunks); job.progress = 65
-        job.result, model_version = generate(draft)
+        draft = build_draft(chunks); job.progress = 60
+        if settings.agentic_workflow_enabled:
+            job.result, model_version, artifacts = run_agentic_workflow(
+                draft, chunks, job.classification, job.id,
+            )
+        else:
+            job.result, model_version = generate(draft)
+            _, _, artifacts = run_agentic_workflow(job.result, chunks, job.classification, job.id)
+        job.workflow_artifacts = artifacts.model_dump(mode="json")
         MODEL_VERSIONS[job_id] = model_version; job.progress = 84
         output = Path(store.sessions[job.session_id][0].path).parent / f"reference-{job.id}.pptx"
         render_ppt(job.result, job.classification, output, job.id, model_version, _visual_path(job.session_id))

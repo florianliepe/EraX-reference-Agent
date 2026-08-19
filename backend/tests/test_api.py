@@ -1,4 +1,5 @@
 from io import BytesIO
+import json
 from docx import Document
 from fastapi.testclient import TestClient
 from backend.app.config import settings
@@ -33,5 +34,23 @@ def test_full_flow(monkeypatch, tmp_path):
     )
     assert patched.json()["fields"]["kpis"][0]["edited"] is True
     assert patched.json()["fields"]["kpis"][0]["evidence"][0]["source_file"] == "reference.docx"
+    assert client.post(
+        f"/approve/{job_id}",
+        headers=headers,
+        json={"approved_by": "", "reuse_allowed": False},
+    ).status_code == 422
+    approval = client.post(
+        f"/approve/{job_id}",
+        headers=headers,
+        json={"approved_by": "Pilot Reviewer", "reuse_allowed": True},
+    )
+    assert approval.status_code == 200
+    assert approval.json()["publication"]["status"] == "local"
+    knowledge = client.get(f"/knowledge/{job_id}", headers=headers)
+    assert knowledge.status_code == 200
+    graph = json.loads(knowledge.content)["@graph"]
+    approved_claims = [item for item in graph if item.get("@type") == "erax:Claim"]
+    assert any(item["schema:description"] == "Incident triage reduction: 25%" for item in approved_claims)
+    assert all(item["erax:status"] == "human-approved" for item in approved_claims)
     download = client.get(f"/download/{job_id}", headers=headers)
     assert download.status_code == 200
