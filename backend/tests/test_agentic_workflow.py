@@ -35,7 +35,7 @@ def test_failed_verification_reverts_writer_output(monkeypatch):
     monkeypatch.setattr(agentic_workflow.settings, "llm_provider", "openai")
     monkeypatch.setattr(agentic_workflow.settings, "openai_api_key", "test")
 
-    def fake_call(stage, _prompt, _payload, traces):
+    def fake_call(stage, _prompt, _payload, traces, _deadline=None):
         traces.append(agentic_workflow.AgentTrace(
             stage=stage, status="completed", model="fake", prompt_version="test"
         ))
@@ -53,3 +53,32 @@ def test_failed_verification_reverts_writer_output(monkeypatch):
     result, _, artifacts = run_agentic_workflow(original, chunks, "internal", "job-2")
     assert result.client.value == "Northwind Rail"
     assert artifacts.verification.status == "fail"
+
+
+def test_workflow_reports_each_long_running_stage(monkeypatch):
+    chunks = [SourceChunk("f1", "brief.docx", Chunk("Client: Northwind Rail", "paragraph 1"))]
+    updates = []
+    monkeypatch.setattr(agentic_workflow.settings, "agentic_workflow_enabled", False)
+
+    run_agentic_workflow(
+        build_draft(chunks), chunks, "internal", "job-3",
+        lambda stage, progress: updates.append((stage, progress)),
+    )
+
+    assert [progress for _, progress in updates] == [62, 67, 72, 77, 82, 86]
+    assert updates[-1][0] == "Verifying every claim against evidence"
+
+
+def test_expired_deadline_uses_deterministic_fallback(monkeypatch):
+    traces = []
+    monkeypatch.setattr(agentic_workflow.settings, "agentic_workflow_enabled", True)
+    monkeypatch.setattr(agentic_workflow.settings, "llm_provider", "openai")
+    monkeypatch.setattr(agentic_workflow.settings, "openai_api_key", "test")
+
+    result = agentic_workflow._agent_call(
+        "evidence-curator", "prompt", {}, traces, deadline=0,
+    )
+
+    assert result is None
+    assert traces[0].status == "fallback"
+    assert "deadline exceeded" in (traces[0].error or "").lower()

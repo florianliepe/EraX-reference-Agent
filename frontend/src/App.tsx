@@ -75,6 +75,7 @@ function App() {
     [statuses, setStatuses] = useState<StatusFile[]>([]);
   const [job, setJob] = useState(""),
     [progress, setProgress] = useState(0),
+    [stage, setStage] = useState("Waiting to start"),
     [busy, setBusy] = useState(false);
   const [fields, setFields] = useState<Fields | null>(null),
     [kpis, setKpis] = useState<Kpi[]>([]),
@@ -141,6 +142,7 @@ function App() {
     if (!r.ok) throw new Error(data.detail || "Could not read job status");
     setStatuses(data.files);
     setProgress(data.progress);
+    setStage(data.stage || "Processing source evidence");
     if (data.status === "completed") {
       const result = await fetch(`${API}/result/${id}`, { headers }).then((x) =>
         x.json(),
@@ -168,6 +170,8 @@ function App() {
       setBusy(true);
       setError("");
       setFields(null);
+      setProgress(0);
+      setStage("Uploading source material");
       const form = new FormData();
       files.forEach((file) => form.append("files", file));
       const uploaded = await fetch(`${API}/upload`, {
@@ -403,12 +407,7 @@ function App() {
                   <div className="progress">
                     <div style={{ width: `${progress}%` }} />
                     <span>
-                      {progress}% ·{" "}
-                      {progress < 50
-                        ? "Reading source evidence"
-                        : progress < 84
-                          ? "Structuring the story"
-                          : "Rendering the slide"}
+                      {progress}% · {stage}
                     </span>
                   </div>
                 )}
@@ -643,6 +642,7 @@ function App() {
                   setFiles([]);
                   setStatuses([]);
                   setProgress(0);
+                  setStage("Waiting to start");
                   setReviewer("");
                   setReuseAllowed(false);
                 }}

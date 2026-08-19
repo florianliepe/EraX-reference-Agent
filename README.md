@@ -47,6 +47,8 @@ npm run dev
 | `OPENAI_API_KEY` | Server-only OpenAI-compatible model credential | unset |
 | `OPENAI_BASE_URL` | OpenAI-compatible API base URL; use `https://ai-gateway.eraneos.com` for the Eraneos AI Gateway | unset |
 | `OPENAI_MODEL` | Model used by the OpenAI adapter | `gpt-5-mini` |
+| `AGENT_REQUEST_TIMEOUT_SECONDS` | Maximum duration of one agent call before grounded fallback | `20` |
+| `AGENT_WORKFLOW_TIMEOUT_SECONDS` | Total agentic workflow deadline | `120` |
 | `AGENTIC_WORKFLOW_ENABLED` | Enable the typed multi-stage LLM workflow | `false` |
 | `CANONICAL_LANGUAGE` | Working/output language; original evidence remains unchanged | `en` |
 | `CROSS_PROJECT_REUSE_ENABLED` | Allow retrieval of approved, opt-in claims | `false` |

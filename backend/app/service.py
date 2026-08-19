@@ -25,11 +25,12 @@ def _visual_path(session_id: str) -> Path | None:
 def process_job(job_id: str) -> None:
     job = store.jobs[job_id]
     try:
-        job.status = "running"; job.progress = 8
+        job.status = "running"; job.progress = 8; job.stage = "Preparing source files"
         chunks: list[SourceChunk] = []
         labels: list[str] = []
         files = store.sessions[job.session_id]
         for index, file in enumerate(files):
+            job.stage = f"Reading source evidence ({index + 1}/{len(files)})"
             file.status = "parsing"
             try:
                 parsed = parse_file(Path(file.path))
@@ -42,22 +43,30 @@ def process_job(job_id: str) -> None:
         if not chunks:
             raise ValueError("No readable source evidence was extracted")
         job.classification = max(labels or ["public"], key=lambda label: CLASSIFICATION_ORDER[label])
-        draft = build_draft(chunks); job.progress = 60
+        job.stage = "Building the evidence baseline"
+        draft = build_draft(chunks); job.progress = 58
+
+        def report_stage(stage: str, progress: int) -> None:
+            job.stage = stage
+            job.progress = progress
+
         if settings.agentic_workflow_enabled:
             job.result, model_version, artifacts = run_agentic_workflow(
-                draft, chunks, job.classification, job.id,
+                draft, chunks, job.classification, job.id, report_stage,
             )
         else:
             job.result, model_version = generate(draft)
-            _, _, artifacts = run_agentic_workflow(job.result, chunks, job.classification, job.id)
+            _, _, artifacts = run_agentic_workflow(
+                job.result, chunks, job.classification, job.id, report_stage,
+            )
         job.workflow_artifacts = artifacts.model_dump(mode="json")
-        MODEL_VERSIONS[job_id] = model_version; job.progress = 84
+        MODEL_VERSIONS[job_id] = model_version; job.progress = 88; job.stage = "Rendering the PowerPoint"
         output = Path(store.sessions[job.session_id][0].path).parent / f"reference-{job.id}.pptx"
         render_ppt(job.result, job.classification, output, job.id, model_version, _visual_path(job.session_id))
-        job.output_path = str(output); job.progress = 100; job.status = "completed"
+        job.output_path = str(output); job.progress = 100; job.status = "completed"; job.stage = "Ready for review"
         job.completed_at = datetime.now(timezone.utc)
     except Exception as exc:
-        job.status = "failed"; job.error = str(exc); job.progress = 100
+        job.status = "failed"; job.error = str(exc); job.progress = 100; job.stage = "Generation failed"
 
 
 def update_result(job_id: str, values: dict[str, str], kpis: list[dict[str, str]] | None = None) -> ReferenceDraft:

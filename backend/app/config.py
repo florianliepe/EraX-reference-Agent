@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5-mini"
     openai_embedding_model: str | None = None
     agentic_workflow_enabled: bool = False
+    agent_request_timeout_seconds: float = 20.0
+    agent_workflow_timeout_seconds: float = 120.0
     canonical_language: str = "en"
     cross_project_reuse_enabled: bool = False
     external_web_enrichment_enabled: bool = False
