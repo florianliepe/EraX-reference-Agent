@@ -3,7 +3,7 @@ import json
 from docx import Document
 from fastapi.testclient import TestClient
 from backend.app.config import settings
-from backend.app.main import app
+from backend.app.main import FAILED_AUTH_LIMIT, app, attempts
 
 
 def test_full_flow(monkeypatch, tmp_path):
@@ -30,7 +30,10 @@ def test_full_flow(monkeypatch, tmp_path):
     patched = client.patch(
         f"/result/{job_id}",
         headers=headers,
-        json={"values": {}, "kpis": [{"id": kpi_id, "name": "Incident triage reduction", "value": "25%"}]},
+        json={"values": {}, "kpis": [
+            {"id": kpi_id, "name": "Incident triage reduction", "value": "25%"},
+            {"name": "Reviewer-supplied target", "value": "42%"},
+        ]},
     )
     assert patched.json()["fields"]["kpis"][0]["edited"] is True
     assert patched.json()["fields"]["kpis"][0]["evidence"][0]["source_file"] == "reference.docx"
@@ -52,5 +55,29 @@ def test_full_flow(monkeypatch, tmp_path):
     approved_claims = [item for item in graph if item.get("@type") == "erax:Claim"]
     assert any(item["schema:description"] == "Incident triage reduction: 25%" for item in approved_claims)
     assert all(item["erax:status"] == "human-approved" for item in approved_claims)
+    ungrounded = next(item for item in approved_claims if item["schema:description"] == "Reviewer-supplied target: 42%")
+    assert ungrounded["prov:wasDerivedFrom"] == []
+    assert ungrounded["erax:reuseAllowed"] is False
     download = client.get(f"/download/{job_id}", headers=headers)
     assert download.status_code == 200
+
+
+def test_valid_status_polling_is_not_rate_limited():
+    attempts.clear()
+    client = TestClient(app)
+    headers = {"X-Pilot-Password": settings.pilot_password}
+    responses = [client.get("/auth/check", headers=headers) for _ in range(75)]
+    assert all(response.status_code == 200 for response in responses)
+    assert not attempts
+
+
+def test_only_failed_authentication_uses_login_rate_limit():
+    attempts.clear()
+    client = TestClient(app)
+    headers = {"X-Pilot-Password": "wrong"}
+    for _ in range(FAILED_AUTH_LIMIT):
+        assert client.get("/auth/check", headers=headers).status_code == 401
+    limited = client.get("/auth/check", headers=headers)
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) >= 1
+    attempts.clear()
