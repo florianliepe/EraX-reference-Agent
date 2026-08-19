@@ -16,7 +16,7 @@ from .service import MODEL_VERSIONS, process_job, update_result
 from .store import store
 
 
-app = FastAPI(title="EraX Reference Agent", version="0.1.0")
+app = FastAPI(title="EraX Reference Agent", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 attempts: dict[str, deque[float]] = defaultdict(deque)
 FAILED_AUTH_LIMIT = 10
@@ -55,7 +55,7 @@ class Approval(BaseModel):
 
 
 @app.get("/health")
-def health(): return {"status": "ok"}
+def health(): return {"status": "ok", "release": "agent-progress-v1"}
 
 
 @app.get("/auth/check", dependencies=[Depends(auth)])
@@ -86,7 +86,14 @@ def start_generation(session_id: str, background: BackgroundTasks):
 def status(job_id: str):
     job = store.jobs.get(job_id)
     if not job: raise HTTPException(404, "Job not found")
-    return {"job_id": job.id, "status": job.status, "progress": job.progress, "error": job.error, "files": store.sessions[job.session_id]}
+    return {
+        "job_id": job.id,
+        "status": job.status,
+        "progress": job.progress,
+        "stage": job.stage,
+        "error": job.error,
+        "files": store.sessions[job.session_id],
+    }
 
 
 @app.get("/result/{job_id}", dependencies=[Depends(auth)])

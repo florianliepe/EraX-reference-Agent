@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
+from collections.abc import Callable
 from typing import Any
 
 from . import agent_prompts
@@ -26,7 +28,13 @@ def _stable_id(prefix: str, value: str) -> str:
     return f"{prefix}_{hashlib.sha256(value.encode()).hexdigest()[:20]}"
 
 
-def _agent_call(stage: str, prompt: str, payload: dict[str, Any], traces: list[AgentTrace]) -> dict[str, Any] | None:
+def _agent_call(
+    stage: str,
+    prompt: str,
+    payload: dict[str, Any],
+    traces: list[AgentTrace],
+    deadline: float | None = None,
+) -> dict[str, Any] | None:
     if not settings.agentic_workflow_enabled or settings.llm_provider != "openai" or not settings.openai_api_key:
         traces.append(AgentTrace(
             stage=stage,
@@ -35,13 +43,24 @@ def _agent_call(stage: str, prompt: str, payload: dict[str, Any], traces: list[A
             prompt_version=agent_prompts.PROMPT_VERSION,
         ))
         return None
+    remaining = deadline - time.monotonic() if deadline is not None else settings.agent_request_timeout_seconds
+    if remaining <= 0:
+        traces.append(AgentTrace(
+            stage=stage,
+            status="fallback",
+            model=settings.openai_model,
+            prompt_version=agent_prompts.PROMPT_VERSION,
+            error="Workflow deadline exceeded; deterministic evidence fallback used",
+        ))
+        return None
     try:
         from openai import OpenAI
 
         client = OpenAI(
             api_key=settings.openai_api_key,
             base_url=settings.openai_base_url,
-            timeout=45,
+            timeout=max(1.0, min(settings.agent_request_timeout_seconds, remaining)),
+            max_retries=0,
         )
         response = client.chat.completions.create(
             model=settings.openai_model,
@@ -94,7 +113,7 @@ def _evidence_id_for(units: list[EvidenceUnit], source_file: str, locator: str |
     return next((unit.id for unit in units if unit.source_file == source_file and snippet[:80] in unit.original_text), None)
 
 
-def _curate(units: list[EvidenceUnit], traces: list[AgentTrace]) -> list[EvidenceUnit]:
+def _curate(units: list[EvidenceUnit], traces: list[AgentTrace], deadline: float | None = None) -> list[EvidenceUnit]:
     payload_units = [{
         "id": unit.id,
         "source_file": unit.source_file,
@@ -106,6 +125,7 @@ def _curate(units: list[EvidenceUnit], traces: list[AgentTrace]) -> list[Evidenc
         agent_prompts.CURATOR,
         {"canonical_language": settings.canonical_language, "units": payload_units},
         traces,
+        deadline,
     )
     if not response:
         return units
@@ -168,6 +188,7 @@ def _link(
     draft: ReferenceDraft,
     units: list[EvidenceUnit],
     traces: list[AgentTrace],
+    deadline: float | None = None,
 ) -> tuple[list[EntityCandidate], list[NormalizedMetric]]:
     entities = _default_entities(draft, units)
     metrics = _default_metrics(draft, units)
@@ -180,6 +201,7 @@ def _link(
             "deterministic_metrics": [item.model_dump() for item in metrics],
         },
         traces,
+        deadline,
     )
     if not response:
         return entities, metrics
@@ -223,6 +245,7 @@ def _plan_and_retrieve(
     classification: str,
     project_id: str,
     traces: list[AgentTrace],
+    deadline: float | None = None,
 ) -> tuple[list[RetrievalQuery], list]:
     response = _agent_call(
         "retrieval-planner",
@@ -234,10 +257,11 @@ def _plan_and_retrieve(
             "external_web_enrichment": False,
         },
         traces,
+        deadline,
     )
     queries: list[RetrievalQuery] = []
     if response:
-        for item in response.get("queries", [])[:8]:
+        for item in response.get("queries", [])[:3]:
             try:
                 queries.append(RetrievalQuery.model_validate(item))
             except Exception:
@@ -246,8 +270,17 @@ def _plan_and_retrieve(
     if settings.cross_project_reuse_enabled and queries:
         store = AzureKnowledgeStore()
         for query in queries:
+            remaining = deadline - time.monotonic() if deadline is not None else 10.0
+            if remaining <= 0:
+                break
             try:
-                retrieved.extend(store.query_approved(query.query, classification, project_id, query.top))
+                retrieved.extend(store.query_approved(
+                    query.query,
+                    classification,
+                    project_id,
+                    query.top,
+                    timeout=max(1.0, min(8.0, remaining)),
+                ))
             except Exception as exc:
                 traces.append(AgentTrace(
                     stage="azure-search-retrieval",
@@ -266,6 +299,7 @@ def _aggregate(
     metrics: list[NormalizedMetric],
     retrieved: list,
     traces: list[AgentTrace],
+    deadline: float | None = None,
 ) -> ClaimLedger:
     baseline = _default_claims(draft, units)
     response = _agent_call(
@@ -278,6 +312,7 @@ def _aggregate(
             "baseline_claims": baseline.model_dump(),
         },
         traces,
+        deadline,
     )
     if not response:
         return baseline
@@ -301,6 +336,7 @@ def _write(
     original: ReferenceDraft,
     ledger: ClaimLedger,
     traces: list[AgentTrace],
+    deadline: float | None = None,
 ) -> tuple[ReferenceDraft, dict[str, list[str]]]:
     response = _agent_call(
         "reference-writer",
@@ -312,6 +348,7 @@ def _write(
             "output_language": settings.canonical_language,
         },
         traces,
+        deadline,
     )
     if not response:
         return original.model_copy(deep=True), {}
@@ -339,6 +376,7 @@ def _verify(
     mappings: dict[str, list[str]],
     units: list[EvidenceUnit],
     traces: list[AgentTrace],
+    deadline: float | None = None,
 ) -> tuple[ReferenceDraft, VerificationReport]:
     response = _agent_call(
         "grounding-verifier",
@@ -350,6 +388,7 @@ def _verify(
             "limits": LIMITS,
         },
         traces,
+        deadline,
     )
     if not response:
         return original.model_copy(deep=True), VerificationReport(status="pass")
@@ -367,14 +406,23 @@ def run_agentic_workflow(
     chunks: list[SourceChunk],
     classification: str,
     project_id: str,
+    progress_callback: Callable[[str, int], None] | None = None,
 ) -> tuple[ReferenceDraft, str, WorkflowArtifacts]:
+    deadline = time.monotonic() + settings.agent_workflow_timeout_seconds
+    report = progress_callback or (lambda _stage, _progress: None)
     traces: list[AgentTrace] = []
-    units = _curate(_build_evidence(chunks, classification), traces)
-    entities, metrics = _link(draft, units, traces)
-    queries, retrieved = _plan_and_retrieve(draft, units, classification, project_id, traces)
-    ledger = _aggregate(draft, units, metrics, retrieved, traces)
-    written, mappings = _write(draft, ledger, traces)
-    verified, verification = _verify(written, draft, ledger, mappings, units, traces)
+    report("Curating and translating evidence", 62)
+    units = _curate(_build_evidence(chunks, classification), traces, deadline)
+    report("Linking entities and project KPIs", 67)
+    entities, metrics = _link(draft, units, traces, deadline)
+    report("Planning permission-filtered retrieval", 72)
+    queries, retrieved = _plan_and_retrieve(draft, units, classification, project_id, traces, deadline)
+    report("Aggregating evidence-backed claims", 77)
+    ledger = _aggregate(draft, units, metrics, retrieved, traces, deadline)
+    report("Writing the reference narrative", 82)
+    written, mappings = _write(draft, ledger, traces, deadline)
+    report("Verifying every claim against evidence", 86)
+    verified, verification = _verify(written, draft, ledger, mappings, units, traces, deadline)
     artifacts = WorkflowArtifacts(
         evidence_units=units,
         entities=entities,

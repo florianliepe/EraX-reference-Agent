@@ -89,6 +89,7 @@ class AzureKnowledgeStore:
         classification: str,
         project_id: str,
         top: int = 5,
+        timeout: float = 8.0,
     ) -> list[RetrievedKnowledge]:
         if not self.search_configured or not settings.cross_project_reuse_enabled:
             return []
@@ -105,7 +106,7 @@ class AzureKnowledgeStore:
             f"{self.search_endpoint}/indexes/{settings.azure_search_index_references}/docs/search"
             f"?api-version={settings.azure_search_api_version}"
         )
-        response = httpx.post(url, headers=self._search_headers(), json=body, timeout=20)
+        response = httpx.post(url, headers=self._search_headers(), json=body, timeout=timeout)
         response.raise_for_status()
         results = []
         for item in response.json().get("value", []):

@@ -61,6 +61,7 @@ class JobRecord(BaseModel):
     session_id: str
     status: str = "queued"
     progress: int = 0
+    stage: str = "Queued"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: datetime | None = None
     classification: str = "public"
