@@ -21,6 +21,7 @@ from .knowledge_models import (
 )
 from .knowledge_store import AzureKnowledgeStore
 from .models import Confidence, ReferenceDraft
+from .semantic import OUTCOME_REQUIRED, SemanticAnalysis, analyze_reference, build_blocks
 from .structuring import KPI_LIMIT, LIMITS, SourceChunk, compact
 
 
@@ -90,27 +91,45 @@ def _agent_call(
         return None
 
 
-def _build_evidence(chunks: list[SourceChunk], classification: str) -> list[EvidenceUnit]:
+def _build_evidence(
+    chunks: list[SourceChunk],
+    classification: str,
+    analysis: SemanticAnalysis | None = None,
+) -> list[EvidenceUnit]:
     units: list[EvidenceUnit] = []
-    for item in chunks:
-        identity = f"{item.file_id}:{item.chunk.location}:{item.chunk.text}"
+    blocks = analysis.blocks if analysis else build_blocks(chunks, classification)
+    for block in blocks:
         units.append(EvidenceUnit(
-            id=_stable_id("ev", identity),
-            file_id=item.file_id,
-            source_file=item.source_file,
-            locator=item.chunk.location,
-            original_text=item.chunk.text,
-            normalized_text=item.chunk.text,
+            id=block.id,
+            file_id=block.file_id,
+            source_file=block.source_file,
+            locator=f"page {block.page}" if block.page else None,
+            original_text=block.original_text,
+            normalized_text=block.normalized_text,
             classification=classification,
+            page=block.page,
+            bbox=block.bbox,
+            block_type=block.block_type,
+            heading_path=block.heading_path,
+            parser=block.parser,
+            repeated=block.repeated,
         ))
     return units
 
 
-def _evidence_id_for(units: list[EvidenceUnit], source_file: str, locator: str | None, snippet: str) -> str | None:
-    exact = next((unit for unit in units if unit.source_file == source_file and unit.locator == locator), None)
+def _evidence_id_for(
+    units: list[EvidenceUnit],
+    source_file: str,
+    locator: str | None,
+    snippet: str,
+    block_id: str | None = None,
+) -> str | None:
+    if block_id and any(unit.id == block_id for unit in units):
+        return block_id
+    exact = next((unit for unit in units if unit.source_file == source_file and snippet[:80] in unit.original_text), None)
     if exact:
         return exact.id
-    return next((unit.id for unit in units if unit.source_file == source_file and snippet[:80] in unit.original_text), None)
+    return next((unit.id for unit in units if unit.source_file == source_file and unit.locator == locator), None)
 
 
 def _curate(units: list[EvidenceUnit], traces: list[AgentTrace], deadline: float | None = None) -> list[EvidenceUnit]:
@@ -154,7 +173,7 @@ def _default_entities(draft: ReferenceDraft, units: list[EvidenceUnit]) -> list[
             continue
         evidence_ids = [
             value for ev in section.evidence
-            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet))
+            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet, ev.block_id))
         ]
         results.append(EntityCandidate(
             id=_stable_id("entity", f"{entity_type}:{section.value.casefold()}"),
@@ -162,6 +181,7 @@ def _default_entities(draft: ReferenceDraft, units: list[EvidenceUnit]) -> list[
             name=section.value,
             evidence_ids=evidence_ids,
             confidence=0.9 if section.confidence == Confidence.strong else 0.65,
+            role="client" if field == "client" else None,
         ))
     return results
 
@@ -171,7 +191,7 @@ def _default_metrics(draft: ReferenceDraft, units: list[EvidenceUnit]) -> list[N
     for metric in draft.kpis[:KPI_LIMIT]:
         evidence_ids = [
             value for ev in metric.evidence
-            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet))
+            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet, ev.block_id))
         ]
         results.append(NormalizedMetric(
             id=metric.id,
@@ -224,7 +244,7 @@ def _default_claims(draft: ReferenceDraft, units: list[EvidenceUnit]) -> ClaimLe
             continue
         evidence_ids = [
             value for ev in section.evidence
-            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet))
+            if (value := _evidence_id_for(units, ev.source_file, ev.page_or_sheet, ev.snippet, ev.block_id))
         ]
         if not evidence_ids:
             continue
@@ -235,6 +255,7 @@ def _default_claims(draft: ReferenceDraft, units: list[EvidenceUnit]) -> ClaimLe
             status="supported",
             confidence=0.9 if section.confidence == Confidence.strong else 0.65,
             evidence_ids=evidence_ids,
+            claim_mode=section.claim_mode.value,
         ))
     return ClaimLedger(claims=claims)
 
@@ -300,6 +321,7 @@ def _aggregate(
     retrieved: list,
     traces: list[AgentTrace],
     deadline: float | None = None,
+    analysis: SemanticAnalysis | None = None,
 ) -> ClaimLedger:
     baseline = _default_claims(draft, units)
     response = _agent_call(
@@ -310,6 +332,12 @@ def _aggregate(
             "metrics": [item.model_dump() for item in metrics],
             "approved_retrieved_knowledge": [item.model_dump() for item in retrieved[:20]],
             "baseline_claims": baseline.model_dump(),
+            "document_profiles": [item.model_dump() for item in (analysis.profiles if analysis else [])],
+            "field_candidate_packets": {
+                field: [item.model_dump() for item in (analysis.candidates if analysis else []) if item.field == field][:6]
+                for field in LIMITS
+            },
+            "excluded_block_ids": analysis.excluded_block_ids if analysis else [],
         },
         traces,
         deadline,
@@ -391,13 +419,18 @@ def _verify(
         deadline,
     )
     if not response:
-        return original.model_copy(deep=True), VerificationReport(status="pass")
+        verified = original.model_copy(deep=True) if original.reference_status == "planned" else draft
+        if verified.reference_status == "planned" and verified.outcome_impact.claim_mode.value != "actual":
+            verified.outcome_impact.value = OUTCOME_REQUIRED
+        return verified, VerificationReport(status="pass")
     try:
         report = VerificationReport.model_validate(response)
     except Exception:
         return original.model_copy(deep=True), VerificationReport(status="fail")
     if report.status != "pass":
         return original.model_copy(deep=True), report
+    if draft.reference_status == "planned" and draft.outcome_impact.claim_mode.value != "actual":
+        draft.outcome_impact.value = OUTCOME_REQUIRED
     return draft, report
 
 
@@ -411,19 +444,26 @@ def run_agentic_workflow(
     deadline = time.monotonic() + settings.agent_workflow_timeout_seconds
     report = progress_callback or (lambda _stage, _progress: None)
     traces: list[AgentTrace] = []
-    report("Curating and translating evidence", 62)
-    units = _curate(_build_evidence(chunks, classification), traces, deadline)
+    analysis = analyze_reference(chunks, classification)
+    report("Classifying document and project phase", 60)
+    report("Curating and translating semantic blocks", 64)
+    units = _curate(_build_evidence(chunks, classification, analysis), traces, deadline)
     report("Linking entities and project KPIs", 67)
     entities, metrics = _link(draft, units, traces, deadline)
     report("Planning permission-filtered retrieval", 72)
     queries, retrieved = _plan_and_retrieve(draft, units, classification, project_id, traces, deadline)
     report("Aggregating evidence-backed claims", 77)
-    ledger = _aggregate(draft, units, metrics, retrieved, traces, deadline)
+    ledger = _aggregate(draft, units, metrics, retrieved, traces, deadline, analysis)
     report("Writing the reference narrative", 82)
     written, mappings = _write(draft, ledger, traces, deadline)
     report("Verifying every claim against evidence", 86)
     verified, verification = _verify(written, draft, ledger, mappings, units, traces, deadline)
     artifacts = WorkflowArtifacts(
+        document_profiles=analysis.profiles,
+        document_blocks=analysis.blocks,
+        field_candidates=analysis.candidates,
+        aggregated_fields=analysis.aggregated,
+        excluded_block_ids=analysis.excluded_block_ids,
         evidence_units=units,
         entities=entities,
         metrics=metrics,

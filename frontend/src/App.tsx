@@ -45,6 +45,16 @@ type Section = {
   confidence: "strong" | "weak" | "missing";
   evidence: Evidence[];
   edited: boolean;
+  claim_mode:
+    | "fact"
+    | "planned"
+    | "target"
+    | "actual"
+    | "commercial"
+    | "inferred"
+    | "unknown";
+  semantic_type?: string;
+  inference_basis: string[];
 };
 type Kpi = {
   id?: string;
@@ -55,6 +65,13 @@ type Kpi = {
   edited: boolean;
 };
 type Fields = Record<string, Section>;
+type CommercialMetric = {
+  id: string;
+  name: string;
+  value: string;
+  evidence: Evidence[];
+  internal_only: boolean;
+};
 const labels: Record<string, string> = {
   title: "Reference title",
   client: "Client",
@@ -79,6 +96,9 @@ function App() {
     [busy, setBusy] = useState(false);
   const [fields, setFields] = useState<Fields | null>(null),
     [kpis, setKpis] = useState<Kpi[]>([]),
+    [commercialMetrics, setCommercialMetrics] = useState<CommercialMetric[]>([]),
+    [referenceStatus, setReferenceStatus] = useState("unknown"),
+    [sourceMetadata, setSourceMetadata] = useState<Record<string, Section>>({}),
     [classification, setClassification] = useState("public"),
     [error, setError] = useState("");
   const [reviewer, setReviewer] = useState(""),
@@ -147,9 +167,26 @@ function App() {
       const result = await fetch(`${API}/result/${id}`, { headers }).then((x) =>
         x.json(),
       );
-      const { kpis: resultKpis = [], ...resultFields } = result.fields;
+      const {
+        kpis: resultKpis = [],
+        commercial_metrics: resultCommercialMetrics = [],
+        reference_status: resultReferenceStatus = "unknown",
+        supplier,
+        project_id: projectId,
+        ...resultFields
+      } = result.fields;
       setFields(resultFields);
       setKpis(resultKpis);
+      setCommercialMetrics(resultCommercialMetrics);
+      setReferenceStatus(resultReferenceStatus);
+      setSourceMetadata(
+        Object.fromEntries(
+          Object.entries({ supplier, project_id: projectId }).filter(
+            ([, value]) =>
+              value && value.value !== "Insufficient source evidence",
+          ),
+        ) as Record<string, Section>,
+      );
       setClassification(result.classification);
       setBusy(false);
       return;
@@ -426,9 +463,14 @@ function App() {
                 <p className="eyebrow">03 · Review the story</p>
                 <h2>Every claim stays connected to its source.</h2>
               </div>
-              <span className={`classification ${classification}`}>
-                {classification}
-              </span>
+              <div className="review-badges">
+                <span className={`reference-status ${referenceStatus}`}>
+                  {referenceStatus.replace("_", " ")} reference
+                </span>
+                <span className={`classification ${classification}`}>
+                  {classification}
+                </span>
+              </div>
             </div>
             <div className="review-grid">
               <div>
@@ -439,6 +481,9 @@ function App() {
                         <label htmlFor={key}>{labels[key]}</label>
                         <span className={`confidence ${section.confidence}`}>
                           {section.confidence}
+                        </span>
+                        <span className={`claim-mode ${section.claim_mode}`}>
+                          {section.claim_mode}
                         </span>
                       </div>
                       <textarea
@@ -561,6 +606,27 @@ function App() {
                     ))
                   )}
                 </section>
+                {(Object.keys(sourceMetadata).length > 0 ||
+                  commercialMetrics.length > 0) && (
+                  <section className="commercial-panel">
+                    <p className="eyebrow">Internal project context</p>
+                    <h3>Excluded from the client-facing slide</h3>
+                    <div className="metric-list">
+                      {Object.entries(sourceMetadata).map(([key, section]) => (
+                        <div key={key}>
+                          <span>{key === "project_id" ? "Project / offer ID" : "Supplier"}</span>
+                          <strong>{section.value}</strong>
+                        </div>
+                      ))}
+                      {commercialMetrics.map((metric) => (
+                        <div key={metric.id}>
+                          <span>{metric.name}</span>
+                          <strong>{metric.value}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section className="approval-panel">
                   <p className="eyebrow">Human approval</p>
                   <label>
@@ -593,6 +659,9 @@ function App() {
                     <summary>
                       <span className={`dot ${section.confidence}`} />
                       {labels[key]}
+                      <span className={`claim-mode ${section.claim_mode}`}>
+                        {section.claim_mode}
+                      </span>
                       <span>{section.evidence.length}</span>
                     </summary>
                     {section.evidence.length ? (
@@ -639,6 +708,9 @@ function App() {
                 onClick={() => {
                   setFields(null);
                   setKpis([]);
+                  setCommercialMetrics([]);
+                  setReferenceStatus("unknown");
+                  setSourceMetadata({});
                   setFiles([]);
                   setStatuses([]);
                   setProgress(0);

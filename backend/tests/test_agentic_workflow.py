@@ -65,7 +65,7 @@ def test_workflow_reports_each_long_running_stage(monkeypatch):
         lambda stage, progress: updates.append((stage, progress)),
     )
 
-    assert [progress for _, progress in updates] == [62, 67, 72, 77, 82, 86]
+    assert [progress for _, progress in updates] == [60, 64, 67, 72, 77, 82, 86]
     assert updates[-1][0] == "Verifying every claim against evidence"
 
 

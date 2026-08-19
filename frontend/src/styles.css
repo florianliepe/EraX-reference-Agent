@@ -279,6 +279,42 @@ textarea {
   background: #191816;
   color: white;
 }
+.review-badges {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.reference-status,
+.claim-mode {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: #efede9;
+  color: #5d5851;
+}
+.reference-status.planned,
+.claim-mode.planned,
+.claim-mode.target {
+  background: #f8edcf;
+  color: #7b5b0a;
+}
+.claim-mode.actual,
+.claim-mode.fact {
+  background: #e6eee7;
+  color: #275735;
+}
+.claim-mode.inferred {
+  background: #e8e8f5;
+  color: #3c3c77;
+}
 .review-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.6fr);
@@ -326,7 +362,7 @@ textarea {
 .review summary {
   cursor: pointer;
   display: grid;
-  grid-template-columns: 8px 1fr auto;
+  grid-template-columns: 8px 1fr auto auto;
   gap: 9px;
   align-items: center;
   font-size: 13px;
@@ -365,6 +401,30 @@ cite {
 .missing-copy {
   font-size: 12px;
   color: #777168;
+}
+.commercial-panel {
+  margin-top: 20px;
+  border: 1px solid #ded9d1;
+  border-radius: 12px;
+  padding: 20px;
+  background: #f7f5f1;
+}
+.commercial-panel h3 {
+  margin: 4px 0 16px;
+}
+.metric-list {
+  display: grid;
+  gap: 9px;
+}
+.metric-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #e3ded6;
+  padding-top: 9px;
+}
+.metric-list span {
+  color: #6e6961;
 }
 .approval-panel {
   margin-top: 20px;

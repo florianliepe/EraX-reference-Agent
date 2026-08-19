@@ -6,6 +6,63 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
+class DocumentBlock(BaseModel):
+    id: str
+    file_id: str
+    source_file: str
+    page: int | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    block_type: Literal[
+        "title", "heading", "paragraph", "list_item", "table", "table_row",
+        "header", "footer", "signature",
+    ] = "paragraph"
+    heading_path: list[str] = Field(default_factory=list)
+    original_text: str
+    normalized_text: str
+    language: str = "und"
+    font_size: float | None = None
+    is_bold: bool = False
+    reading_order: int = 0
+    repeated: bool = False
+    parser: str = "local"
+    classification: str = "public"
+
+
+class DocumentProfile(BaseModel):
+    document_type: Literal[
+        "offer", "statement_of_work", "status_report", "final_report",
+        "presentation", "commercial_calculation", "mixed", "unknown",
+    ] = "unknown"
+    source_language: str = "und"
+    project_phase: Literal["proposal", "planned", "in_delivery", "completed", "unknown"] = "unknown"
+    confidence: float = 0.5
+    evidence_block_ids: list[str] = Field(default_factory=list)
+
+
+class FieldCandidate(BaseModel):
+    field: str
+    value: str
+    semantic_type: str = "unknown"
+    claim_mode: Literal["fact", "planned", "target", "actual", "commercial", "inferred", "unknown"] = "unknown"
+    evidence_block_ids: list[str] = Field(default_factory=list)
+    structural_score: float = 0
+    lexical_score: float = 0
+    semantic_score: float = 0
+    combined_score: float = 0
+    warnings: list[str] = Field(default_factory=list)
+
+
+class AggregatedField(BaseModel):
+    field: str
+    value: str
+    confidence: float = 0.5
+    claim_mode: Literal["fact", "planned", "target", "actual", "commercial", "inferred", "unknown"] = "unknown"
+    evidence_block_ids: list[str] = Field(default_factory=list)
+    inference_basis: list[str] = Field(default_factory=list)
+    conflicts: list[str] = Field(default_factory=list)
+    missing_reason: str | None = None
+
+
 class EvidenceUnit(BaseModel):
     id: str
     file_id: str
@@ -18,6 +75,12 @@ class EvidenceUnit(BaseModel):
     classification: str = "public"
     confidence: float = 1.0
     warnings: list[str] = Field(default_factory=list)
+    page: int | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    block_type: str = "paragraph"
+    heading_path: list[str] = Field(default_factory=list)
+    parser: str = "local"
+    repeated: bool = False
 
 
 class EntityCandidate(BaseModel):
@@ -28,6 +91,7 @@ class EntityCandidate(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     confidence: float = 0.5
     ambiguous: bool = False
+    role: str | None = None
 
 
 class NormalizedMetric(BaseModel):
@@ -55,6 +119,7 @@ class Claim(BaseModel):
     confidence: float = 0.5
     evidence_ids: list[str] = Field(default_factory=list)
     contradicting_evidence_ids: list[str] = Field(default_factory=list)
+    claim_mode: Literal["fact", "planned", "target", "actual", "commercial", "inferred", "unknown"] = "unknown"
 
 
 class ClaimLedger(BaseModel):
@@ -100,6 +165,11 @@ class AgentTrace(BaseModel):
 
 
 class WorkflowArtifacts(BaseModel):
+    document_profiles: list[DocumentProfile] = Field(default_factory=list)
+    document_blocks: list[DocumentBlock] = Field(default_factory=list)
+    field_candidates: list[FieldCandidate] = Field(default_factory=list)
+    aggregated_fields: list[AggregatedField] = Field(default_factory=list)
+    excluded_block_ids: list[str] = Field(default_factory=list)
     evidence_units: list[EvidenceUnit] = Field(default_factory=list)
     entities: list[EntityCandidate] = Field(default_factory=list)
     metrics: list[NormalizedMetric] = Field(default_factory=list)

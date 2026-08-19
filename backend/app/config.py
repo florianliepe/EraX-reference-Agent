@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     azure_search_index_references: str = "erax-references-v1"
     azure_search_api_version: str = "2024-07-01"
     knowledge_blob_container_url: str | None = None
+    azure_document_intelligence_endpoint: str | None = None
+    azure_document_intelligence_api_key: str | None = None
+    azure_document_intelligence_api_version: str = "2024-11-30"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

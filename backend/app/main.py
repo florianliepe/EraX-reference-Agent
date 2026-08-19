@@ -16,7 +16,7 @@ from .service import MODEL_VERSIONS, process_job, update_result
 from .store import store
 
 
-app = FastAPI(title="EraX Reference Agent", version="0.2.0")
+app = FastAPI(title="EraX Reference Agent", version="0.3.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 attempts: dict[str, deque[float]] = defaultdict(deque)
 FAILED_AUTH_LIMIT = 10
@@ -55,7 +55,7 @@ class Approval(BaseModel):
 
 
 @app.get("/health")
-def health(): return {"status": "ok", "release": "agent-progress-v1"}
+def health(): return {"status": "ok", "release": "semantic-retrieval-v2"}
 
 
 @app.get("/auth/check", dependencies=[Depends(auth)])
