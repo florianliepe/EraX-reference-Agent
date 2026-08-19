@@ -122,7 +122,22 @@ function App() {
   };
   async function poll(id: string) {
     const r = await fetch(`${API}/status/${id}`, { headers });
-    const data = await r.json();
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 429) {
+      const retryAfter = Math.min(
+        Math.max(Number(r.headers.get("Retry-After")) || 5, 2),
+        60,
+      );
+      setTimeout(
+        () =>
+          poll(id).catch((e) => {
+            setError(e.message);
+            setBusy(false);
+          }),
+        retryAfter * 1000,
+      );
+      return;
+    }
     if (!r.ok) throw new Error(data.detail || "Could not read job status");
     setStatuses(data.files);
     setProgress(data.progress);
@@ -145,7 +160,7 @@ function App() {
           setError(e.message);
           setBusy(false);
         }),
-      800,
+      2000,
     );
   }
   const generate = async () => {

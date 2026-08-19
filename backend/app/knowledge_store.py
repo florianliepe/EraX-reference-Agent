@@ -212,6 +212,7 @@ class AzureKnowledgeStore:
                 "erax:section": claim["section"],
                 "erax:status": "human-approved",
                 "erax:humanEdited": claim["human_edited"],
+                "erax:reuseAllowed": reuse_allowed and bool(claim["evidence_ids"]),
                 "prov:wasDerivedFrom": [
                     {"@id": f"urn:erax:evidence:{item}"} for item in claim["evidence_ids"]
                 ],
@@ -262,7 +263,7 @@ class AzureKnowledgeStore:
                 "classification": job.classification,
                 "classification_rank": rank,
                 "approved": True,
-                "reuse_allowed": reuse_allowed,
+                "reuse_allowed": reuse_allowed and bool(claim["evidence_ids"]),
                 "language": settings.canonical_language,
                 "evidence_ids": claim["evidence_ids"],
                 "source_files": sorted({

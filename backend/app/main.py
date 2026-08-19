@@ -19,17 +19,29 @@ from .store import store
 app = FastAPI(title="EraX Reference Agent", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=settings.origins, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
 attempts: dict[str, deque[float]] = defaultdict(deque)
+FAILED_AUTH_LIMIT = 10
+FAILED_AUTH_WINDOW_SECONDS = 60
 
 
 def auth(request: Request, x_pilot_password: str = Header(default="")) -> None:
-    key = request.client.host if request.client else "unknown"
-    now = time.time(); window = attempts[key]
-    while window and window[0] < now - 60: window.popleft()
-    if len(window) >= 60: raise HTTPException(429, "Rate limit exceeded; retry in one minute")
-    window.append(now)
     expected = hashlib.sha256(settings.pilot_password.encode()).digest()
     supplied = hashlib.sha256(x_pilot_password.encode()).digest()
-    if expected != supplied: raise HTTPException(401, "Invalid pilot password")
+    if expected == supplied:
+        return
+
+    key = request.client.host if request.client else "unknown"
+    now = time.time(); window = attempts[key]
+    while window and window[0] < now - FAILED_AUTH_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= FAILED_AUTH_LIMIT:
+        retry_after = max(1, int(FAILED_AUTH_WINDOW_SECONDS - (now - window[0])))
+        raise HTTPException(
+            429,
+            "Too many failed login attempts",
+            headers={"Retry-After": str(retry_after)},
+        )
+    window.append(now)
+    raise HTTPException(401, "Invalid pilot password")
 
 
 class Edits(BaseModel):
