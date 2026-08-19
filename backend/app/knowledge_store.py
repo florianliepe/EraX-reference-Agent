@@ -26,13 +26,24 @@ def _public_blob_url(value: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
 
 
+def _evidence_ids(items: list[Any], artifacts: WorkflowArtifacts) -> list[str]:
+    evidence_by_block = {unit.id: unit.id for unit in artifacts.evidence_units}
+    evidence_by_locator = {
+        (unit.source_file, unit.locator): unit.id for unit in artifacts.evidence_units
+    }
+    return sorted({
+        evidence_by_block.get(item.block_id)
+        or evidence_by_locator.get((item.source_file, item.page_or_sheet))
+        for item in items
+        if evidence_by_block.get(item.block_id)
+        or evidence_by_locator.get((item.source_file, item.page_or_sheet))
+    })
+
+
 def _approved_claims(job: JobRecord, artifacts: WorkflowArtifacts) -> list[dict[str, Any]]:
     """Build the publication ledger from the exact human-reviewed result."""
     if not job.result:
         return []
-    evidence_lookup = {
-        (unit.source_file, unit.locator): unit.id for unit in artifacts.evidence_units
-    }
     claims: list[dict[str, Any]] = []
     for section in (
         "title", "client", "date", "industry", "service",
@@ -41,31 +52,29 @@ def _approved_claims(job: JobRecord, artifacts: WorkflowArtifacts) -> list[dict[
         value = getattr(job.result, section)
         if value.value == "Insufficient source evidence":
             continue
-        evidence_ids = sorted({
-            evidence_lookup[(item.source_file, item.page_or_sheet)]
-            for item in value.evidence
-            if (item.source_file, item.page_or_sheet) in evidence_lookup
-        })
+        section_evidence_ids = _evidence_ids(value.evidence, artifacts)
         claims.append({
             "id": _safe_id("approved", f"{job.id}:{section}:{value.value}"),
             "section": section,
             "text": value.value,
-            "evidence_ids": evidence_ids,
+            "evidence_ids": section_evidence_ids,
             "human_edited": value.edited,
+            "claim_mode": value.claim_mode.value,
+            "semantic_type": value.semantic_type,
+            "inference_basis": value.inference_basis,
         })
     for metric in job.result.kpis:
-        evidence_ids = sorted({
-            evidence_lookup[(item.source_file, item.page_or_sheet)]
-            for item in metric.evidence
-            if (item.source_file, item.page_or_sheet) in evidence_lookup
-        })
+        metric_evidence_ids = _evidence_ids(metric.evidence, artifacts)
         text = f"{metric.name}: {metric.value}"
         claims.append({
             "id": _safe_id("approved", f"{job.id}:kpi:{text}"),
             "section": "kpi",
             "text": text,
-            "evidence_ids": evidence_ids,
+            "evidence_ids": metric_evidence_ids,
             "human_edited": metric.edited,
+            "claim_mode": metric.status,
+            "semantic_type": "improvement_kpi",
+            "inference_basis": None,
         })
     return claims
 
@@ -176,6 +185,9 @@ class AzureKnowledgeStore:
             "schema:name": job.result.title.value,
             "schema:description": job.result.outcome_impact.value,
             "erax:classification": job.classification,
+            "erax:referenceStatus": job.result.reference_status,
+            "erax:projectIdentifier": job.result.project_id.value,
+            "erax:supplier": job.result.supplier.value,
             "erax:approved": True,
             "erax:reuseAllowed": reuse_allowed,
             "prov:wasGeneratedBy": {"@id": activity_id},
@@ -213,12 +225,28 @@ class AzureKnowledgeStore:
                 "erax:section": claim["section"],
                 "erax:status": "human-approved",
                 "erax:humanEdited": claim["human_edited"],
+                "erax:claimMode": claim["claim_mode"],
+                "erax:semanticType": claim["semantic_type"],
+                "erax:inferenceBasis": claim["inference_basis"],
                 "erax:reuseAllowed": reuse_allowed and bool(claim["evidence_ids"]),
                 "prov:wasDerivedFrom": [
                     {"@id": f"urn:erax:evidence:{item}"} for item in claim["evidence_ids"]
                 ],
                 "prov:wasGeneratedBy": {"@id": activity_id},
                 "prov:wasInfluencedBy": {"@id": review_id},
+            })
+        for metric in job.result.commercial_metrics:
+            graph.append({
+                "@id": f"urn:erax:commercial:{metric.id}",
+                "@type": "erax:CommercialMetric",
+                "schema:name": metric.name,
+                "schema:value": metric.value,
+                "erax:internalOnly": True,
+                "erax:classification": job.classification,
+                "prov:wasDerivedFrom": [
+                    {"@id": f"urn:erax:evidence:{item}"}
+                    for item in _evidence_ids(metric.evidence, artifacts)
+                ],
             })
         for metric in artifacts.metrics:
             graph.append({

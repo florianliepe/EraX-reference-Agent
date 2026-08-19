@@ -42,8 +42,10 @@ def test_flexible_kpis_are_extracted_as_grounded_pairs():
     draft = sample_draft()
     pairs = {(item.name, item.value) for item in draft.kpis}
     assert ("Planning Time reduction", "30 percent") in pairs
-    assert ("Project Revenue", "EUR 1.2 million") in pairs
     assert all(item.evidence[0].source_file == "brief.docx" for item in draft.kpis)
+    assert ("Project revenue", "EUR 1.2 million") in {
+        (item.name, item.value) for item in draft.commercial_metrics
+    }
 
 
 def test_openai_compatible_gateway_uses_configured_base_url(monkeypatch):
@@ -94,5 +96,5 @@ def test_renderer_always_creates_one_slide(tmp_path: Path):
     content = next(shape for shape in slide.shapes if shape.name == "Table 13").table
     assert "Manual planning caused delayed maintenance decisions." in content.cell(0, 0).text
     assert "Key KPIs" in content.cell(1, 0).text
-    assert "EUR 1.2 million" in content.cell(1, 0).text
+    assert "EUR 1.2 million" not in content.cell(1, 0).text
     assert "No structured test management" not in content.cell(0, 0).text

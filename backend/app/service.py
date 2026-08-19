@@ -43,7 +43,7 @@ def process_job(job_id: str) -> None:
         if not chunks:
             raise ValueError("No readable source evidence was extracted")
         job.classification = max(labels or ["public"], key=lambda label: CLASSIFICATION_ORDER[label])
-        job.stage = "Building the evidence baseline"
+        job.stage = "Retrieving evidence for reference fields"
         draft = build_draft(chunks); job.progress = 58
 
         def report_stage(stage: str, progress: int) -> None:

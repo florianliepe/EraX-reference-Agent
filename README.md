@@ -104,3 +104,11 @@ Map local blob storage to Azure Blob Storage, job state to PostgreSQL, backgroun
 
 See [target-mode instructions](docs/TARGET_MODE.md) and [architecture](docs/ARCHITECTURE.md).
 The agentic knowledge design, typed contracts, prompts, repair rules, and acceptance gates are in [Agentic Reference Intelligence target mode](docs/TARGET_MODE_AGENTIC_KNOWLEDGE.md).
+
+### Semantic reference retrieval
+
+The generation pipeline now preserves page layout and reading order, classifies document and project phase, removes repeated headers/footers and contractual boilerplate, and retrieves evidence separately for each reference field. Exact labelled values outrank narrative mentions. Client and supplier candidates are role-aware, project IDs and dates are typed, and planned scope is aggregated from the relevant heading path instead of the whole document.
+
+Controlled inference is restricted to explicitly modeled values such as an industry inferred from a recognized client or a service derived from the exact project title. Such values are marked `inferred` with an inference basis. Offers and plans produce a `planned` reference: scope is labelled as planned and missing results remain `Outcome evidence required`. Commercial figures are stored as internal-only metadata and never rendered as client impact KPIs.
+
+PDFs use local layout extraction first. When extraction quality is low and Azure Document Intelligence credentials are configured, the parser falls back to `prebuilt-layout`. Set `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` and `AZURE_DOCUMENT_INTELLIGENCE_API_KEY` to enable that fallback.

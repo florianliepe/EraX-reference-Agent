@@ -134,15 +134,16 @@ def render_ppt(
 
     content = _shape(slide, CONTENT_TABLE).table
     _set_section_cell(content.cell(0, 0), "Initial Situation", draft.situation_challenge.value)
-    _set_section_cell(content.cell(0, 1), "Approach and Solution", draft.approach.value)
-    kpi_summary = "; ".join(f"{item.name}: {item.value}" for item in draft.kpis[:3])
+    approach_heading = "Planned Approach" if draft.reference_status == "planned" else "Approach and Solution"
+    _set_section_cell(content.cell(0, 1), approach_heading, draft.approach.value)
+    kpi_summary = "; ".join(f"{item.name}: {item.value}" for item in draft.kpis[:3] if item.status != "forecast")
     _set_section_cell(content.cell(1, 0), "Impact", draft.outcome_impact.value, kpi_summary or None)
     _replace_picture(slide, image_path)
 
     deck.core_properties.title = draft.title.value
     deck.core_properties.subject = "Eraneos client reference one-pager"
     deck.core_properties.comments = (
-        f"classification={classification}; job={job_id}; generator={model_version}; "
+        f"classification={classification}; reference_status={draft.reference_status}; job={job_id}; generator={model_version}; "
         "template=Reference Template.pptx"
     )
     if len(deck.slides) != 1:

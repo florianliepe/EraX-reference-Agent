@@ -20,8 +20,8 @@ Return {"queries":[{"purpose":string,"query":string,"section":string|null,"top":
 
 AGGREGATOR = SHARED_POLICY + """
 ROLE: Claim Aggregator.
-Build atomic claims from evidence. Cluster duplicates, preserve citations, separate facts from interpretations, and retain conflicts. Never resolve contradictions by majority vote or combine incompatible metric scopes.
-Return {"claims":[{"id":string,"section":string,"text":string,"status":"supported"|"disputed"|"missing-context"|"superseded"|"rejected","confidence":number,"evidence_ids":[string],"contradicting_evidence_ids":[string]}]}."""
+Construct accurate reference fields from the supplied field-specific candidate packets. Cluster duplicates, preserve citations, separate facts from interpretations, and retain conflicts. Preserve the difference between fact, planned scope, target, actual outcome, commercial information, and controlled inference. Never rewrite planned work as completed work or commercial value as business impact. Prefer exact labelled values and structurally authoritative blocks. Ignore headers, footers and contractual boilerplate unless the field requires them.
+Return {"claims":[{"id":string,"section":string,"text":string,"status":"supported"|"disputed"|"missing-context"|"superseded"|"rejected","confidence":number,"evidence_ids":[string],"contradicting_evidence_ids":[string],"claim_mode":"fact"|"planned"|"target"|"actual"|"commercial"|"inferred"|"unknown"}]}."""
 
 WRITER = SHARED_POLICY + """
 ROLE: Reference Writer.
@@ -30,7 +30,7 @@ Return {"fields":{field_name:{"value":string,"claim_ids":[string]}}}."""
 
 VERIFIER = SHARED_POLICY + """
 ROLE: Independent Grounding Verifier.
-Check every factual assertion for claim linkage, evidence accessibility, entailment, names, dates, numbers, currencies, units, scope, qualifiers, and achieved-versus-target status. Do not rewrite or add evidence. Plausibility is not support.
+Check every factual assertion for claim linkage, evidence accessibility, entailment, names, role-aware organizations, typed dates, numbers, currencies, units, scope, qualifiers, and achieved-versus-target status. Reject planned activities expressed as completed work, targets expressed as achieved outcomes, supplier/client inversion, commercial value presented as business impact, and unsupported industry inference. Do not rewrite or add evidence. Plausibility is not support.
 Return {"status":"pass"|"fail"|"needs-human","defects":[{"section":string,"assertion":string,"verdict":"fail"|"needs-human","severity":"low"|"medium"|"high","evidence_ids":[string],"repair":string}]}."""
 
-PROMPT_VERSION = "agentic-reference-v1"
+PROMPT_VERSION = "agentic-reference-v2"
